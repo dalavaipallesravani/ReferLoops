@@ -1,34 +1,66 @@
-#import requests
-#from bs4 import BeautifulSoup
-from playwright.sync_api import sync_playwright
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from excel_reader import read_excel_file
+from utils import get_page
+from selector_detector import detect_selectors
+from datetime import datetime, timedelta
+from config import MAX_AGE_DAYS, LOCATION_FILTER
 
-def sample_requests():
-    #response = requests.get('https://www.amazon.jobs/content/en/teams/international-stores/india')
+def scrape_all_companies():
     companies=read_excel_file()
-    #URL = 'https://www.amazon.jobs/content/en/teams/international-stores/india'
-
+    all_jobs = []
     for company in companies:
-        with sync_playwright() as p:
-            browser = p.chromium.launch()
-            page = browser.new_page()
-            page.goto(company["Careers_URL"])
-            page.wait_for_timeout(3000)
-            all_jobs=[]
-            while True:
-                jobs=page.query_selector_all(company["Job_Selector"])
-                for job in jobs:
-                    all_jobs.append(job.inner_text())
-                next_button=page.query_selector(company["Next_Button_Selector"])
-                if next_button:
-                    next_button.click()
-                    page.wait_for_timeout(3000)
-                else:
-                    break          
-            if len(all_jobs)==0:
-                print(f"Warning: Selector may be broken for{company['Company_name']}")
+        selectors = detect_selectors(company["Platform"])
+        if selectors is None:
+            print(f"No platform found for {company['Company_name']}. Skipping...")
+            continue
+        page, browser, playwright = get_page(company["Careers_URL"])
+        
+        while True:
+            job_cards = page.query_selector_all(selectors["job_card_selector"])
+            for card in job_cards:
+                title = card.query_selector(selectors["job_title_selector"]).inner_text()
+                #location = card.query_selector(selectors["location_selector"]).inner_text()
+                #date  = card.query_selector(selectors["date_selector"]).inner_text()
+                metadata = card.query_selector_all(selectors["metadata_selector"])
+                location = metadata[0].inner_text() if len(metadata) > 0 else ""
+                date = metadata[1].inner_text() if len(metadata) > 1 else ""
+                job = {
+                    "title": title,
+                    "location": location,
+                    "date": date,
+                    "company": company["Company_name"],
+                    "careers_URL": company["Careers_URL"]
+                }
+                if is_recent(date) and is_India(location):
+                    all_jobs.append(job)
+            if selectors["next_button_selector"] is None:
+                break
+            next_button = page.query_selector(selectors["next_button_selector"])
+            if next_button and next_button.is_enabled():
+                next_button.click()
+                page.wait_for_timeout(2000)
             else:
-                print(f"{company['Company_name']} : {len(all_jobs)} jobs found")
+                break
+        browser.close()
+        playwright.stop()    
+    return all_jobs
 
+def is_recent(date_str):
+    date_str = date_str.replace("Updated:", "").strip()
+    try:
+        job_date = datetime.strptime(date_str, "%m/%d/%Y")
+        return datetime.now() - job_date <= timedelta(days=MAX_AGE_DAYS)
+    except:
+        return False
+
+def is_India(location_str):
+    india_keywords = ["india", "ind", "bengaluru", "hyderabad", "mumbai", "delhi", "gurugram", "noida", "chennai", "pune"]
+    return any(keyword in location_str.lower() for keyword in india_keywords)
+        
 if __name__ == "__main__":
-    sample_requests()
+    jobs = scrape_all_companies()
+    print(f"Total jobs scraped: {len(jobs)}")
+    for job in jobs:
+        print(job)
