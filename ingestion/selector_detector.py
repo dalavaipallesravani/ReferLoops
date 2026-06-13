@@ -9,7 +9,8 @@ PLATFORM_SELECTORS = {
     #"location_selector": "div.metadatum-module_text__ncKFr:first-of-type",
     #"date_selector": "div.metadatum-module_text__ncKFr:last-of-type",
     "metadata_selector": "div.metadatum-module_text__ncKFr",
-    "next_button_selector": "button[data-test-id='next-page']"
+    "next_button_selector": "button[data-test-id='next-page']",
+    "base_url": "https://www.amazon.jobs"
 },
     "turbohire": {
     "job_card_selector": "div[stroke='#EBEFFF']",

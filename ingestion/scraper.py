@@ -20,7 +20,9 @@ def scrape_all_companies():
         while True:
             job_cards = page.query_selector_all(selectors["job_card_selector"])
             for card in job_cards:
-                title = card.query_selector(selectors["job_title_selector"]).inner_text()
+                title_el = card.query_selector(selectors["job_title_selector"])
+                title = title_el.inner_text()
+                job_url = selectors["base_url"] + title_el.get_attribute("href")
                 #location = card.query_selector(selectors["location_selector"]).inner_text()
                 #date  = card.query_selector(selectors["date_selector"]).inner_text()
                 metadata = card.query_selector_all(selectors["metadata_selector"])
@@ -31,7 +33,7 @@ def scrape_all_companies():
                     "location": location,
                     "date": date,
                     "company": company["Company_name"],
-                    "careers_URL": company["Careers_URL"]
+                    "url": job_url
                 }
                 if is_recent(date) and is_India(location):
                     all_jobs.append(job)
